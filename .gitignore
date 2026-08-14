@@ -1,0 +1,24 @@
+# Bỏ qua các file dữ liệu lớn (Không đẩy lên GitHub)
+*.zip
+*.rar
+*.csv
+*.xlsx
+*.docx
+*.pdf
+
+# Bỏ qua các thư mục dữ liệu giải nén
+/corpus/
+/data/
+
+# Bỏ qua các file cấu hình tạm hoặc file sinh ra trong quá trình chạy
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+
+# (Tuỳ chọn) Bạn có thể bỏ qua file json nếu không muốn đẩy data lên
+# Nhưng ở đây tạm thời bỏ qua file zip lớn
+selected-contexts.zip
+train.json
+warmup.json
+public-official.json
