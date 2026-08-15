@@ -12,4 +12,8 @@ OVERLAP_WORDS = 50          # Số từ gối đầu nhau để không đứt ng
 # 3. Thông số Mô hình (Models)
 EMBEDDING_MODEL = "AITeamVN/Vietnamese_Embedding_v2"
 EMBEDDING_DIM = 1024
-MAX_POSITION_EMBEDDINGS = 8194
+MAX_POSITION_EMBEDDINGS = 8192
+
+# 4. Cấu hình Vector hóa (Embedding Phase)
+EMBEDDING_OUTPUT_FILE = r"vector_database.jsonl"
+EMBEDDING_BATCH_SIZE = 4  # Giảm xuống 4 để tránh tràn VRAM T4 (do 1 chunk có thể dài tới 8192 token)

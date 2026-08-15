@@ -1,0 +1,7 @@
+# Thư viện cho Tiền xử lý (Preprocessing)
+# (Đa số các thư viện như os, json, re đều có sẵn trong chuẩn Python)
+
+# Thư viện cho Vector hóa (Embedding)
+torch
+transformers
+sentence-transformers
