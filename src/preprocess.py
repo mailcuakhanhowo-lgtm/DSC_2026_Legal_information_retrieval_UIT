@@ -1,7 +1,15 @@
 import os
 import re
 import json
+import glob
 import unicodedata
+import logging
+import argparse
+import config
+
+# Thiết lập Logging hệ thống
+logging.basicConfig(filename='pipeline_errors.log', level=logging.WARNING, 
+                    format='%(asctime)s - %(message)s')
 
 def filter_and_clean_text(text: str) -> str:
     """
@@ -13,134 +21,145 @@ def filter_and_clean_text(text: str) -> str:
     # 1. Chuẩn hóa Unicode tiếng Việt về NFC
     text = unicodedata.normalize('NFC', text)
     
-    # 2. Xóa bỏ ký tự rác sinh ra do lỗi copy, nối các từ bị đứt gãy
-    # Ví dụ: BAN\r\n\nHÀNH -> BAN HÀNH
-    text = re.sub(r'([A-ZÀ-Ỹ])\r?\n\s*\r?\n([A-ZÀ-Ỹ])', r'\1 \2', text)
+    # 2. Xóa phần thủ tục nơi nhận, chữ ký
+    text = re.sub(
+        r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(?:\n\s*(?:QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.))|\Z)', 
+        '', 
+        text, 
+        flags=re.DOTALL
+    )
+        
+    # 3. Thu gọn các khoảng trắng thừa trên cùng một dòng (giữ lại dấu xuống dòng \n)
+    text = re.sub(r'[ \t]+', ' ', text)
+        
+    # 4. Thu gọn khoảng trắng thừa nhiều dòng
+    text = re.sub(r'\n{3,}', '\n\n', text)
     
-    # 3. Lọc phần Mở đầu (Preamble)
-    # Giữ lại từ "QUYẾT ĐỊNH:", "NGHỊ QUYẾT:", "CĂN CỨ:" hoặc "Điều 1."
-    match_start = re.search(r'(QUYẾT ĐỊNH:|NGHỊ QUYẾT:|Điều 1\.)', text)
-    if match_start:
-        text = text[match_start.start():]
-        
-    # 4. Lọc phần Chữ ký & Nơi nhận (Signatures & Recipients)
-    # Thay vì cắt cụt toàn bộ văn bản từ "Nơi nhận:", ta chỉ xóa phần khối Nơi nhận/Chữ ký
-    # cho đến khi gặp phần văn bản đính kèm (QUY CHẾ, PHỤ LỤC, Chương, hoặc Điều mới).
-    text = re.sub(r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.|\Z))', '', text, flags=re.DOTALL)
-        
-    # 5. Thu gọn khoảng trắng thừa
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+    return text.strip()
 
-def smart_legal_chunker(text: str, max_words=6000, overlap_words=50) -> list:
+
+def smart_legal_chunker(text: str, max_words: int = 600, overlap_words: int = 50) -> list:
     """
-    Chiến thuật Cắt đoạn 2 lớp (Two-layer Hybrid Chunking).
-    Sử dụng Word Count làm Proxy cho Token Count (8192 tokens ~ 6000 words).
+    Hàm phân đoạn văn bản pháp luật 2 lớp (Two-layer Hybrid Chunking).
     """
-    chunks = []
-    
-    # LỚP 1: Semantic Chunking (Tách đoạn theo Điều)
-    # Sử dụng Lookahead regex để băm ngay trước chữ "Điều [số]."
-    articles = re.split(r'(?=Điều \d+\.)', text)
-    
-    for article in articles:
-        article = article.strip()
-        if not article:
+    if not text or not text.strip():
+        return []
+
+    # LỚP 1: SEMANTIC CHUNKING 
+    pattern = r'(?=(?:\n|^)\s*(?:' \
+              r'Điều\s+\d+[a-zA-Z]*[\.\:]|' \
+              r'(?:Chương|MỤC|Mục|PHỤ LỤC|Phụ lục)\s+(?:[IVXLCDM\d]+|[A-Z])|' \
+              r'\d+(?:\.\d+)*[\.\)]\s*|' \
+              r'[IVXLCDM]+\.\s+|' \
+              r'[a-zà-ỹ]\)' \
+              r'))'
+
+    # Băm văn bản giữ lại tiêu đề ở đầu mỗi đoạn
+    sections = re.split(pattern, text)
+    final_chunks = []
+
+    # LỚP 2: FALLBACK SLIDING WINDOW 
+    for sec in sections:
+        sec = sec.strip()
+        if not sec:
             continue
-            
-        words = article.split()
-        
-        # LỚP 2: Fallback Sliding Window (Nếu Điều quá dài)
-        if len(words) <= max_words:
-            chunks.append(article)
+
+        # Tách theo dấu cách đơn ' ' để đếm từ
+        words = sec.split(' ')
+        word_count = len(words)
+
+        if word_count <= max_words:
+            final_chunks.append(sec)
         else:
             step = max_words - overlap_words
-            for i in range(0, len(words), step):
-                chunk_words = words[i:i + max_words]
-                chunks.append(" ".join(chunk_words))
+            if step <= 0:
+                step = max_words
                 
-    return chunks
+            for i in range(0, word_count, step):
+                chunk_words = words[i:i + max_words]
+                chunk_text = " ".join(chunk_words).strip()
+                if chunk_text:
+                    final_chunks.append(chunk_text)
 
-def process_corpus(input_path: str, output_dir: str, max_words=6000, overlap=50):
-    """
-    Pipeline chính: Đọc JSON (file hoặc thư mục) -> Clean -> Chunk -> Tạo file .md (Small2Big Markdown).
-    """
-    import glob
-    
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
-    files_to_process = []
-    if os.path.isdir(input_path):
-        files_to_process = glob.glob(os.path.join(input_path, "*.json"))
-        print(f"Đang xử lý thư mục chứa {len(files_to_process)} file JSON...")
-    else:
-        files_to_process = [input_path]
-        print(f"Đang đọc dữ liệu từ: {input_path}...")
-        
-    total_count = 0
-    from tqdm import tqdm
-    
-    for file_path in tqdm(files_to_process, desc="Tiền xử lý", unit="file"):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                documents = json.load(f)
-        except Exception as e:
-            print(f"Lỗi đọc file {file_path}: {e}")
-            continue
+    return final_chunks
 
-        # Nếu file là list các dict, duyệt qua từng phần tử
-        if not isinstance(documents, list):
-            if isinstance(documents, dict):
-                # Trường hợp 1: File JSON chỉ chứa đúng 1 văn bản
-                if "passage" in documents and "id" in documents:
-                    documents = [documents]
-                # Trường hợp 2: File JSON chứa nhiều văn bản dạng Dictionary (ID làm key)
-                else:
-                    documents = [{"id": k, **v} for k, v in documents.items() if isinstance(v, dict)]
-            else:
+
+def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_words=600, overlap=50):
+    """
+    Pipeline xử lý dữ liệu thô sang chuẩn JSONL cho Vector Database & BM25.
+    """
+    output_dir = os.path.dirname(output_jsonl_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        
+
+    json_files = glob.iglob(os.path.join(input_dir, "*.json"))
+    
+    total_docs = 0
+    total_chunks = 0
+    
+    with open(output_jsonl_path, 'w', encoding='utf-8') as out_f:
+        for file_path in json_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    doc = json.load(f)
+            except Exception as e:
+                logging.warning(f"Lỗi đọc file {file_path}: {e}")
+
                 continue
                 
-        for doc in documents:
-            doc_id = doc.get("id")
-            title = doc.get("name", "")
-            passage = doc.get("passage", "")
+            doc_id = str(doc.get("id", "")).strip()
+            title = doc.get("name", doc.get("title", "")).strip()
+            passage = doc.get("passage", "").strip()
+            link = doc.get("link", "").strip()
             
             if not doc_id or not passage:
+                logging.warning(f"File {file_path} bị bỏ qua do thiếu 'id' hoặc 'passage'.")
                 continue
                 
-            # 1. Làm sạch & Lọc rác
+            # 1. Làm sạch văn bản thô
             cleaned_text = filter_and_clean_text(passage)
             
-            # 2. Cắt đoạn thông minh
-            chunks = smart_legal_chunker(cleaned_text, max_words=max_words, overlap_words=overlap)
-            
-            # 3. Tạo thư mục và lưu Markdown
-            doc_dir = os.path.join(output_dir, str(doc_id))
-            os.makedirs(doc_dir, exist_ok=True)
-            
-            # Xóa các file .md cũ trong thư mục (nếu có) để tránh tồn đọng rác
-            for f_name in os.listdir(doc_dir):
-                if f_name.endswith('.md'):
-                    os.remove(os.path.join(doc_dir, f_name))
-            
-            # Ghi các chunk ra file Markdown
-            for i, chunk_text in enumerate(chunks):
-                chunk_file_path = os.path.join(doc_dir, f"chunk_{i}.md")
+            # 2. Tính toán offset không gian cho Header Injection
+            title_words = title.split()
+            if len(title_words) > 60:
+                title = " ".join(title_words[:60]) + "..."
                 
-                # Nhúng Title vào đầu mỗi Chunk
-                markdown_content = f"# {title}\n\n{chunk_text}"
+            title_word_count = len(title.split())
+            
+            # Đảm bảo (Title + Chunk) luôn <= base_max_words
+            dynamic_max_words = max(100, base_max_words - title_word_count)
+            
+            # 3. Tách đoạn ngữ nghĩa
+            raw_chunks = smart_legal_chunker(cleaned_text, max_words=dynamic_max_words, overlap_words=overlap)
+            
+            # 4. Ghi dữ liệu dạng JSONL
+            for i, chunk_raw in enumerate(raw_chunks):
+                chunk_id = f"{doc_id}_{i}"
                 
-                with open(chunk_file_path, 'w', encoding='utf-8') as cf:
-                    cf.write(markdown_content)
+                # Header Injection
+                text_with_header = f"# {title}\n\n{chunk_raw}" if title else chunk_raw
+                
+                record = {
+                    "doc_id": doc_id,
+                    "chunk_id": chunk_id,
+                    "title": title,
+                    "text": text_with_header,
+                    "raw_text": chunk_raw,
+                    "word_count": len(text_with_header.split(' ')), 
+                    "link": link
+                }
+                
+                out_f.write(json.dumps(record, ensure_ascii=False) + '\n')
+                total_chunks += 1
+                
+            total_docs += 1
             
-            total_count += 1
-            
-    print(f"✅ Hoàn tất tiền xử lý cho tổng cộng {total_count} văn bản. Đã lưu tại: {output_dir}")
-
-import sys
-import argparse
-import config
+    print(f"\nHOÀN THÀNH TIỀN XỬ LÝ CORPUS!")
+    print(f"Tổng số văn bản xử lý thành công: {total_docs}")
+    print(f"Tổng số chunks đã tạo: {total_chunks}")
+    print(f"File lưu tại: {output_jsonl_path}")
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tiền xử lý văn bản pháp luật (Sàng lọc & Chunking).")
@@ -158,7 +177,7 @@ if __name__ == "__main__":
     # Nếu file tồn tại (do user truyền hoặc file default có thật)
     if os.path.exists(input_path):
         print(f"Bắt đầu tiền xử lý (Max words: {max_w}, Overlap: {overlap_w})")
-        process_corpus(input_path, output_path, max_words=max_w, overlap=overlap_w)
+        process_corpus_to_jsonl(input_path, output_path, max_words=max_w, overlap=overlap_w)
     else:
         # KHỐI KIỂM TRA NGHIỆM THU (Manual Verification) - Nếu không truyền tham số
         print("=== CHẠY THỬ NGHIỆM (DRY RUN) ===")
