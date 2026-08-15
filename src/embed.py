@@ -72,41 +72,40 @@ def embed_corpus():
     all_embeddings = []
     all_metadata_records = []
 
-    with open(output_file, 'w', encoding='utf-8') as out_f:
-        for i, file_path in enumerate(chunk_files):
-            # Đọc nội dung
-            with open(file_path, 'r', encoding='utf-8') as f:
-                text = f.read()
+    for i, file_path in enumerate(chunk_files):
+        # Đọc nội dung
+        with open(file_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        
+        doc_id, chunk_id = extract_metadata_from_path(file_path)
+        
+        batch_texts.append(text)
+        batch_metadata.append({"doc_id": doc_id, "chunk_id": chunk_id})
+        
+        # Xử lý khi Batch đầy hoặc là chunk cuối cùng
+        if len(batch_texts) >= batch_size or i == total_chunks - 1:
+            # Tạo Embedding bằng mô hình
+            embeddings = model.encode(batch_texts, batch_size=batch_size, show_progress_bar=False, convert_to_numpy=True)
             
-            doc_id, chunk_id = extract_metadata_from_path(file_path)
+            # Đưa ma trận vector của batch này vào kho tổng
+            all_embeddings.append(embeddings)
             
-            batch_texts.append(text)
-            batch_metadata.append({"doc_id": doc_id, "chunk_id": chunk_id})
+            # Đưa metadata vào kho tổng (thứ tự khớp 100% với vector)
+            for j in range(len(batch_texts)):
+                record = {
+                    "doc_id": batch_metadata[j]["doc_id"],
+                    "chunk_id": batch_metadata[j]["chunk_id"],
+                    # BM25 sẽ được tính ở Pipeline riêng
+                }
+                all_metadata_records.append(record)
             
-            # Xử lý khi Batch đầy hoặc là chunk cuối cùng
-            if len(batch_texts) >= batch_size or i == total_chunks - 1:
-                # Tạo Embedding bằng mô hình
-                embeddings = model.encode(batch_texts, batch_size=batch_size, show_progress_bar=False, convert_to_numpy=True)
-                
-                # Đưa ma trận vector của batch này vào kho tổng
-                all_embeddings.append(embeddings)
-                
-                # Đưa metadata vào kho tổng (thứ tự khớp 100% với vector)
-                for j in range(len(batch_texts)):
-                    record = {
-                        "doc_id": batch_metadata[j]["doc_id"],
-                        "chunk_id": batch_metadata[j]["chunk_id"],
-                        # BM25 sẽ được tính ở Pipeline riêng
-                    }
-                    all_metadata_records.append(record)
-                
-                processed_count += len(batch_texts)
-                pbar.update(len(batch_texts))
-                
-                # Xóa batch tạm để nạp batch mới
-                batch_texts.clear()
-                batch_metadata.clear()
-                
+            processed_count += len(batch_texts)
+            pbar.update(len(batch_texts))
+            
+            # Xóa batch tạm để nạp batch mới
+            batch_texts.clear()
+            batch_metadata.clear()
+            
     pbar.close()
             
     # 1. Hợp nhất tất cả các ma trận con thành 1 ma trận duy nhất (N x 768)
