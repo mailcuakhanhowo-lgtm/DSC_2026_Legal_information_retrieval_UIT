@@ -1,12 +1,16 @@
 import os
 import re
 import json
-import glob, unicodedata, argparse
-import sys
-import config
+import glob
+import unicodedata
 import logging
+import argparse
+import config
 
-# 1. Text cleaning & noise retrieval
+# Thiết lập Logging hệ thống
+logging.basicConfig(filename='pipeline_errors.log', level=logging.WARNING, 
+                    format='%(asctime)s - %(message)s')
+
 def filter_and_clean_text(text: str) -> str:
     """
     Sàng lọc rác pháp lý và làm sạch văn bản (Noise Filtering & Text Cleaning).
@@ -18,33 +22,25 @@ def filter_and_clean_text(text: str) -> str:
     text = unicodedata.normalize('NFC', text)
     
     # 2. Xóa phần thủ tục nơi nhận, chữ ký
-    # Chỉnh lại so với ban đầu: xem ví dụ ở nơi nhận trong file context_304711 có ví dụ sai khi chưa cắt đúng phần
-    # Bắt đầu thay thế (xóa) văn bản từ chỗ Nơi nhận, KT. Bộ trưởng tới QUY CHẾ | PHỤ LỤC ... hoặc cho tới cuối văn bản
     text = re.sub(
         r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(?:\n\s*(?:QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.))|\Z)', 
         '', 
         text, 
         flags=re.DOTALL
     )
-    
         
     # 3. Thu gọn các khoảng trắng thừa trên cùng một dòng (giữ lại dấu xuống dòng \n)
-    # [ \t]+ chỉ match với space và tab, không match với \n
     text = re.sub(r'[ \t]+', ' ', text)
-
         
-    # Thu gọn khoảng trắng thừa
+    # 4. Thu gọn khoảng trắng thừa nhiều dòng
     text = re.sub(r'\n{3,}', '\n\n', text)
+    
     return text.strip()
+
 
 def smart_legal_chunker(text: str, max_words: int = 600, overlap_words: int = 50) -> list:
     """
     Hàm phân đoạn văn bản pháp luật 2 lớp (Two-layer Hybrid Chunking).
-    
-    :param text: Văn bản pháp luật thô đầu vào.
-    :param max_words: Kích thước từ tối đa cho mỗi chunk (Proxy cho token count).
-    :param overlap_words: Số lượng từ gối đầu khi áp dụng cửa sổ trượt (Sliding Window).
-    :return: Danh sách các đoạn văn bản (chunks) đã được phân tách và làm sạch.
     """
     if not text or not text.strip():
         return []
@@ -60,24 +56,20 @@ def smart_legal_chunker(text: str, max_words: int = 600, overlap_words: int = 50
 
     # Băm văn bản giữ lại tiêu đề ở đầu mỗi đoạn
     sections = re.split(pattern, text)
-
     final_chunks = []
 
     # LỚP 2: FALLBACK SLIDING WINDOW 
     for sec in sections:
-        # Làm sạch khoảng trắng thừa ở đầu/cuối
         sec = sec.strip()
         if not sec:
             continue
 
-        # Tách theo dấu cách đơn ' ' để đếm từ.
+        # Tách theo dấu cách đơn ' ' để đếm từ
         words = sec.split(' ')
         word_count = len(words)
 
-        # Trường hợp 1: Chunk nhỏ hơn hoặc bằng max_words -> Giữ nguyên chunk ngữ nghĩa độc lập
         if word_count <= max_words:
             final_chunks.append(sec)
-        # Trường hợp 2: Chunk vượt quá max_words -> Áp dụng Cửa sổ trượt (Sliding Window)
         else:
             step = max_words - overlap_words
             if step <= 0:
@@ -91,16 +83,10 @@ def smart_legal_chunker(text: str, max_words: int = 600, overlap_words: int = 50
 
     return final_chunks
 
-# Thiết lập Logging hệ thống
-logging.basicConfig(filename='pipeline_errors.log', level=logging.WARNING, 
-                    format='%(asctime)s - %(message)s')
 
 def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_words=600, overlap=50):
     """
     Pipeline xử lý dữ liệu thô sang chuẩn JSONL cho Vector Database & BM25.
-    - Streaming RAM optimization bằng glob.iglob.
-    - Dynamic Max Words: Trừ hao Title offset cho Header Injection.
-    - base_max_words=600 từ: Kích thước Vàng tối ưu Recall@5 cho Vector Search.
     """
     output_dir = os.path.dirname(output_jsonl_path)
     if output_dir and not os.path.exists(output_dir):
@@ -132,7 +118,7 @@ def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_wor
             # 1. Làm sạch văn bản thô
             cleaned_text = filter_and_clean_text(passage)
             
-            # 2. Tính toán offset không gian cho Header Injection (Cắt tối đa 60 từ để giữ Số hiệu Luật)
+            # 2. Tính toán offset không gian cho Header Injection
             title_words = title.split()
             if len(title_words) > 60:
                 title = " ".join(title_words[:60]) + "..."
@@ -142,7 +128,7 @@ def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_wor
             # Đảm bảo (Title + Chunk) luôn <= base_max_words
             dynamic_max_words = max(100, base_max_words - title_word_count)
             
-            # 3. Tách đoạn ngữ nghĩa (Semantic Chunking)
+            # 3. Tách đoạn ngữ nghĩa
             raw_chunks = smart_legal_chunker(cleaned_text, max_words=dynamic_max_words, overlap_words=overlap)
             
             # 4. Ghi dữ liệu dạng JSONL
@@ -189,7 +175,7 @@ if __name__ == "__main__":
     # Nếu file tồn tại (do user truyền hoặc file default có thật)
     if os.path.exists(input_path):
         print(f"Bắt đầu tiền xử lý (Max words: {max_w}, Overlap: {overlap_w})")
-        process_corpus(input_path, output_path, max_words=max_w, overlap=overlap_w)
+        process_corpus_to_jsonl(input_path, output_path, max_words=max_w, overlap=overlap_w)
     else:
         # KHỐI KIỂM TRA NGHIỆM THU (Manual Verification) - Nếu không truyền tham số
         print("=== CHẠY THỬ NGHIỆM (DRY RUN) ===")
