@@ -21,6 +21,11 @@ def filter_and_clean_text(text: str) -> str:
     # 1. Chuẩn hóa Unicode tiếng Việt về NFC
     text = unicodedata.normalize('NFC', text)
     
+    # 1.5. Lọc phần Mở đầu (Preamble) để xóa "Cộng hòa xã hội...", giữ lại từ Căn cứ/Quyết định
+    match_start = re.search(r'(QUYẾT ĐỊNH:|NGHỊ QUYẾT:|CĂN CỨ:|Điều 1\.)', text)
+    if match_start:
+        text = text[match_start.start():]
+    
     # 2. Xóa phần thủ tục nơi nhận, chữ ký
     text = re.sub(
         r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(?:\n\s*(?:QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.))|\Z)', 
@@ -98,8 +103,11 @@ def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_wor
     total_docs = 0
     total_chunks = 0
     
+    from tqdm import tqdm
+    json_files_list = list(json_files)
+    
     with open(output_jsonl_path, 'w', encoding='utf-8') as out_f:
-        for file_path in json_files:
+        for file_path in tqdm(json_files_list, desc="Tiền xử lý", unit="file"):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     doc = json.load(f)
@@ -170,6 +178,10 @@ if __name__ == "__main__":
     
     input_path = args.input
     output_path = args.output
+    
+    # [ANA_FIX]: Đảm bảo output_path là một file .jsonl chứ không phải là một thư mục
+    if not output_path.endswith('.jsonl'):
+        output_path = os.path.join(output_path, 'corpus.jsonl')
     
     max_w = config.MAX_WORDS_PER_CHUNK
     overlap_w = config.OVERLAP_WORDS
