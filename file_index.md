@@ -28,4 +28,10 @@
 ## 5. Các tệp quản lý nội bộ & tệp khác
 - **`file_index.md`** (`D:\Project Vibe Coding\DSC_2026\file_index.md`): Tệp chỉ mục lưu trữ danh sách và đường dẫn toàn bộ các file trong dự án.
 - **`rule.md`** (`D:\Project Vibe Coding\DSC_2026\rule.md`): Tệp lưu trữ các "Điều luật thép" (quy định cốt lõi) bắt buộc tuân thủ cho mọi thành viên/đặc vụ.
+- **`project_diary.md`** (`D:\Project Vibe Coding\DSC_2026\project_diary.md`): Sổ nhật ký ghi lại tiến trình và các quyết định quan trọng của dự án.
+
 - **`read_docx.ps1`** (`D:\Project Vibe Coding\DSC_2026\read_docx.ps1`): Script PowerShell nháp tạo trong quá trình hệ thống cố gắng đọc file docx (có thể xóa).
+
+## 6. Mã nguồn (Source Code)
+- **`src/`** (`D:\Project Vibe Coding\DSC_2026\src\`): Thư mục chính chứa mã nguồn Python của dự án. Tất cả các file xử lý dữ liệu, huấn luyện mô hình, và đánh giá sẽ được lưu tại đây để đồng bộ lên GitHub.
+- **`src/preprocess.py`** (`D:\Project Vibe Coding\DSC_2026\src\preprocess.py`): Script tiền xử lý dữ liệu, tích hợp CLI (argparse) hỗ trợ cắt đoạn (chunking) và làm sạch văn bản, có chế độ Dry-run để test nhanh.
