@@ -19,7 +19,7 @@ def filter_and_clean_text(text: str) -> str:
     
     # 3. Lọc phần Mở đầu (Preamble)
     # Giữ lại từ "QUYẾT ĐỊNH:", "NGHỊ QUYẾT:", "CĂN CỨ:" hoặc "Điều 1."
-    # Cần chinh lại chỗ này trước khi đưa vào cắt nha
+    # Nhớ chỉnh lại chỗ này nha
     match_start = re.search(r'(QUYẾT ĐỊNH:|NGHỊ QUYẾT:|Điều 1\.)', text)
     if match_start:
         text = text[match_start.start():]
