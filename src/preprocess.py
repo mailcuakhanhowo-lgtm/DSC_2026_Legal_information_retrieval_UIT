@@ -79,8 +79,9 @@ def process_corpus(input_path: str, output_dir: str, max_words=6000, overlap=50)
         print(f"Đang đọc dữ liệu từ: {input_path}...")
         
     total_count = 0
+    from tqdm import tqdm
     
-    for file_path in files_to_process:
+    for file_path in tqdm(files_to_process, desc="Tiền xử lý", unit="file"):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 documents = json.load(f)
