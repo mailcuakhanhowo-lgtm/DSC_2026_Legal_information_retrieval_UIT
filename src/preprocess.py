@@ -61,67 +61,81 @@ def smart_legal_chunker(text: str, max_words=6000, overlap_words=50) -> list:
                 
     return chunks
 
-def process_corpus(input_json_path: str, output_dir: str, max_words=6000, overlap=50):
+def process_corpus(input_path: str, output_dir: str, max_words=6000, overlap=50):
     """
-    Pipeline chính: Đọc JSON -> Clean -> Chunk -> Tạo file .md (Small2Big Markdown).
+    Pipeline chính: Đọc JSON (file hoặc thư mục) -> Clean -> Chunk -> Tạo file .md (Small2Big Markdown).
     """
+    import glob
+    
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         
-    print(f"Đang đọc dữ liệu từ: {input_json_path}...")
+    files_to_process = []
+    if os.path.isdir(input_path):
+        files_to_process = glob.glob(os.path.join(input_path, "*.json"))
+        print(f"Đang xử lý thư mục chứa {len(files_to_process)} file JSON...")
+    else:
+        files_to_process = [input_path]
+        print(f"Đang đọc dữ liệu từ: {input_path}...")
+        
+    total_count = 0
     
-    try:
-        with open(input_json_path, 'r', encoding='utf-8') as f:
-            documents = json.load(f)
-    except Exception as e:
-        print(f"Lỗi đọc file JSON: {e}")
-        return
-
-    # Nếu file là list các dict, duyệt qua từng phần tử
-    if not isinstance(documents, list):
-        print("Cấu trúc JSON không phải là một danh sách. Đang thử chế độ Fallback...")
-        if isinstance(documents, dict):
-            # Trường hợp 1: File JSON chỉ chứa đúng 1 văn bản (như context_21.json)
-            if "passage" in documents and "id" in documents:
-                documents = [documents]
-            # Trường hợp 2: File JSON chứa nhiều văn bản dạng Dictionary (ID làm key)
-            else:
-                documents = [{"id": k, **v} for k, v in documents.items() if isinstance(v, dict)]
-        else:
-            print("Định dạng JSON không hợp lệ.")
-            return
-
-    count = 0
-    for doc in documents:
-        doc_id = doc.get("id")
-        title = doc.get("name", "")
-        passage = doc.get("passage", "")
-        
-        if not doc_id or not passage:
+    for file_path in files_to_process:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                documents = json.load(f)
+        except Exception as e:
+            print(f"Lỗi đọc file {file_path}: {e}")
             continue
+
+        # Nếu file là list các dict, duyệt qua từng phần tử
+        if not isinstance(documents, list):
+            if isinstance(documents, dict):
+                # Trường hợp 1: File JSON chỉ chứa đúng 1 văn bản
+                if "passage" in documents and "id" in documents:
+                    documents = [documents]
+                # Trường hợp 2: File JSON chứa nhiều văn bản dạng Dictionary (ID làm key)
+                else:
+                    documents = [{"id": k, **v} for k, v in documents.items() if isinstance(v, dict)]
+            else:
+                continue
+                
+        for doc in documents:
+            doc_id = doc.get("id")
+            title = doc.get("name", "")
+            passage = doc.get("passage", "")
             
-        # 1. Làm sạch & Lọc rác
-        cleaned_text = filter_and_clean_text(passage)
-        
-        # 2. Cắt đoạn thông minh
-        chunks = smart_legal_chunker(cleaned_text, max_words=max_words, overlap_words=overlap)
-        
-        # 3. Tạo thư mục và lưu Markdown
-        doc_dir = os.path.join(output_dir, str(doc_id))
-        os.makedirs(doc_dir, exist_ok=True)
-        
-        for i, chunk_text in enumerate(chunks):
-            chunk_file_path = os.path.join(doc_dir, f"chunk_{i}.md")
+            if not doc_id or not passage:
+                continue
+                
+            # 1. Làm sạch & Lọc rác
+            cleaned_text = filter_and_clean_text(passage)
             
-            # Nhúng Title vào đầu mỗi Chunk
-            markdown_content = f"# {title}\n\n{chunk_text}"
+            # 2. Cắt đoạn thông minh
+            chunks = smart_legal_chunker(cleaned_text, max_words=max_words, overlap_words=overlap)
             
-            with open(chunk_file_path, 'w', encoding='utf-8') as cf:
-                cf.write(markdown_content)
-        
-        count += 1
-        
-    print(f"✅ Hoàn tất tiền xử lý cho {count} văn bản. Đã lưu tại: {output_dir}")
+            # 3. Tạo thư mục và lưu Markdown
+            doc_dir = os.path.join(output_dir, str(doc_id))
+            os.makedirs(doc_dir, exist_ok=True)
+            
+            # Xóa các file .md cũ trong thư mục (nếu có) để tránh tồn đọng rác
+            for f_name in os.listdir(doc_dir):
+                if f_name.endswith('.md'):
+                    os.remove(os.path.join(doc_dir, f_name))
+            
+            # Ghi các chunk ra file Markdown
+            for i, chunk_text in enumerate(chunks):
+                chunk_file_path = os.path.join(doc_dir, f"chunk_{i}.md")
+                
+                # Nhúng Title vào đầu mỗi Chunk
+                markdown_content = f"# {title}\n\n{chunk_text}"
+                
+                with open(chunk_file_path, 'w', encoding='utf-8') as cf:
+                    cf.write(markdown_content)
+            
+            total_count += 1
+            
+    print(f"✅ Hoàn tất tiền xử lý cho tổng cộng {total_count} văn bản. Đã lưu tại: {output_dir}")
 
 import sys
 import argparse
