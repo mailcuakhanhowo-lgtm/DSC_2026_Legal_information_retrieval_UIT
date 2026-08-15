@@ -24,9 +24,9 @@ def filter_and_clean_text(text: str) -> str:
         text = text[match_start.start():]
         
     # 4. Lọc phần Chữ ký & Nơi nhận (Signatures & Recipients)
-    match_end = re.search(r'(Nơi nhận:|KT\. BỘ TRƯỞNG)', text)
-    if match_end:
-        text = text[:match_end.start()]
+    # Thay vì cắt cụt toàn bộ văn bản từ "Nơi nhận:", ta chỉ xóa phần khối Nơi nhận/Chữ ký
+    # cho đến khi gặp phần văn bản đính kèm (QUY CHẾ, PHỤ LỤC, Chương, hoặc Điều mới).
+    text = re.sub(r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.|\Z))', '', text, flags=re.DOTALL)
         
     # 5. Thu gọn khoảng trắng thừa
     text = re.sub(r'\s+', ' ', text).strip()
