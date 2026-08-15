@@ -92,6 +92,7 @@ def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_wor
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
         
+
     json_files = glob.iglob(os.path.join(input_dir, "*.json"))
     
     total_docs = 0
@@ -104,6 +105,7 @@ def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_wor
                     doc = json.load(f)
             except Exception as e:
                 logging.warning(f"Lỗi đọc file {file_path}: {e}")
+
                 continue
                 
             doc_id = str(doc.get("id", "")).strip()
