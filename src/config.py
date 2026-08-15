@@ -16,4 +16,4 @@ MAX_POSITION_EMBEDDINGS = 8192
 
 # 4. Cấu hình Vector hóa (Embedding Phase)
 EMBEDDING_OUTPUT_FILE = r"vector_database.jsonl"
-EMBEDDING_BATCH_SIZE = 4  # Giảm xuống 4 để tránh tràn VRAM T4 (do 1 chunk có thể dài tới 8192 token)
+EMBEDDING_BATCH_SIZE = 6  # Mức 6 là điểm cân bằng hoàn hảo nhất cho VRAM T4
