@@ -2,7 +2,11 @@ import os
 import re
 import json
 import unicodedata
+import glob, unicodedata, argparse
+import sys
+import config
 
+# 1. Text cleaning & noise retrieval
 def filter_and_clean_text(text: str) -> str:
     """
     Sàng lọc rác pháp lý và làm sạch văn bản (Noise Filtering & Text Cleaning).
@@ -13,54 +17,79 @@ def filter_and_clean_text(text: str) -> str:
     # 1. Chuẩn hóa Unicode tiếng Việt về NFC
     text = unicodedata.normalize('NFC', text)
     
-    # 2. Xóa bỏ ký tự rác sinh ra do lỗi copy, nối các từ bị đứt gãy
-    # Ví dụ: BAN\r\n\nHÀNH -> BAN HÀNH
-    text = re.sub(r'([A-ZÀ-Ỹ])\r?\n\s*\r?\n([A-ZÀ-Ỹ])', r'\1 \2', text)
+    # 2. Xóa phần thủ tục nơi nhận, chữ ký
+    # Chỉnh lại so với ban đầu: xem ví dụ ở nơi nhận trong file context_304711 có ví dụ sai khi chưa cắt đúng phần
+    # Bắt đầu thay thế (xóa) văn bản từ chỗ Nơi nhận, KT. Bộ trưởng tới QUY CHẾ | PHỤ LỤC ... hoặc cho tới cuối văn bản
+    text = re.sub(
+        r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(?:\n\s*(?:QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.))|\Z)', 
+        '', 
+        text, 
+        flags=re.DOTALL
+    )
     
-    # 3. Lọc phần Mở đầu (Preamble)
-    # Giữ lại từ "QUYẾT ĐỊNH:", "NGHỊ QUYẾT:", "CĂN CỨ:" hoặc "Điều 1."
-    # Nhớ chỉnh lại chỗ này nha
-    match_start = re.search(r'(QUYẾT ĐỊNH:|NGHỊ QUYẾT:|Điều 1\.)', text)
-    if match_start:
-        text = text[match_start.start():]
         
-    # 4. Lọc phần Chữ ký & Nơi nhận (Signatures & Recipients)
-    # Thay vì cắt cụt toàn bộ văn bản từ "Nơi nhận:", ta chỉ xóa phần khối Nơi nhận/Chữ ký
-    # cho đến khi gặp phần văn bản đính kèm (QUY CHẾ, PHỤ LỤC, Chương, hoặc Điều mới).
-    text = re.sub(r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.|\Z))', '', text, flags=re.DOTALL)
-        
-    # 5. Thu gọn khoảng trắng thừa
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+    # 3. Thu gọn các khoảng trắng thừa trên cùng một dòng (giữ lại dấu xuống dòng \n)
+    # [ \t]+ chỉ match với space và tab, không match với \n
+    text = re.sub(r'[ \t]+', ' ', text)
 
-def smart_legal_chunker(text: str, max_words=6000, overlap_words=50) -> list:
-    """
-    Chiến thuật Cắt đoạn 2 lớp (Two-layer Hybrid Chunking).
-    Sử dụng Word Count làm Proxy cho Token Count (8192 tokens ~ 6000 words).
-    """
-    chunks = []
-    
-    # LỚP 1: Semantic Chunking (Tách đoạn theo Điều)
-    # Sử dụng Lookahead regex để băm ngay trước chữ "Điều [số]."
-    articles = re.split(r'(?=Điều \d+\.)', text)
-    
-    for article in articles:
-        article = article.strip()
-        if not article:
-            continue
-            
-        words = article.split()
         
-        # LỚP 2: Fallback Sliding Window (Nếu Điều quá dài)
-        if len(words) <= max_words:
-            chunks.append(article)
+    # Thu gọn khoảng trắng thừa
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+def smart_legal_chunker(text: str, max_words: int = 600, overlap_words: int = 50) -> list:
+    """
+    Hàm phân đoạn văn bản pháp luật 2 lớp (Two-layer Hybrid Chunking).
+    
+    :param text: Văn bản pháp luật thô đầu vào.
+    :param max_words: Kích thước từ tối đa cho mỗi chunk (Proxy cho token count).
+    :param overlap_words: Số lượng từ gối đầu khi áp dụng cửa sổ trượt (Sliding Window).
+    :return: Danh sách các đoạn văn bản (chunks) đã được phân tách và làm sạch.
+    """
+    if not text or not text.strip():
+        return []
+
+    # LỚP 1: SEMANTIC CHUNKING 
+    pattern = r'(?=(?:\n|^)\s*(?:' \
+              r'Điều\s+\d+[a-zA-Z]*[\.\:]|' \
+              r'(?:Chương|MỤC|Mục|PHỤ LỤC|Phụ lục)\s+(?:[IVXLCDM\d]+|[A-Z])|' \
+              r'\d+(?:\.\d+)*[\.\)]\s*|' \
+              r'[IVXLCDM]+\.\s+|' \
+              r'[a-zà-ỹ]\)' \
+              r'))'
+
+    # Băm văn bản giữ lại tiêu đề ở đầu mỗi đoạn
+    sections = re.split(pattern, text)
+
+    final_chunks = []
+
+    # LỚP 2: FALLBACK SLIDING WINDOW 
+    for sec in sections:
+        # Làm sạch khoảng trắng thừa ở đầu/cuối
+        sec = sec.strip()
+        if not sec:
+            continue
+
+        # Tách theo dấu cách đơn ' ' để đếm từ.
+        words = sec.split(' ')
+        word_count = len(words)
+
+        # Trường hợp 1: Chunk nhỏ hơn hoặc bằng max_words -> Giữ nguyên chunk ngữ nghĩa độc lập
+        if word_count <= max_words:
+            final_chunks.append(sec)
+        # Trường hợp 2: Chunk vượt quá max_words -> Áp dụng Cửa sổ trượt (Sliding Window)
         else:
             step = max_words - overlap_words
-            for i in range(0, len(words), step):
-                chunk_words = words[i:i + max_words]
-                chunks.append(" ".join(chunk_words))
+            if step <= 0:
+                step = max_words
                 
-    return chunks
+            for i in range(0, word_count, step):
+                chunk_words = words[i:i + max_words]
+                chunk_text = " ".join(chunk_words).strip()
+                if chunk_text:
+                    final_chunks.append(chunk_text)
+
+    return final_chunks
 
 def process_corpus(input_path: str, output_dir: str, max_words=6000, overlap=50):
     """
@@ -138,9 +167,6 @@ def process_corpus(input_path: str, output_dir: str, max_words=6000, overlap=50)
             
     print(f"✅ Hoàn tất tiền xử lý cho tổng cộng {total_count} văn bản. Đã lưu tại: {output_dir}")
 
-import sys
-import argparse
-import config
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tiền xử lý văn bản pháp luật (Sàng lọc & Chunking).")
