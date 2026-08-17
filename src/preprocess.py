@@ -21,6 +21,11 @@ def filter_and_clean_text(text: str) -> str:
     # 1. Chuẩn hóa Unicode tiếng Việt về NFC
     text = unicodedata.normalize('NFC', text)
     
+    # 1.5. Lọc phần Mở đầu (Preamble) để xóa "Cộng hòa xã hội...", giữ lại từ Căn cứ/Quyết định
+    match_start = re.search(r'(QUYẾT ĐỊNH:|NGHỊ QUYẾT:|CĂN CỨ:|Điều 1\.)', text)
+    if match_start:
+        text = text[match_start.start():]
+        
     # 2. Xóa phần thủ tục nơi nhận, chữ ký
     text = re.sub(
         r'(Nơi nhận:|KT\. BỘ TRƯỞNG).*?(?=(?:\n\s*(?:QUY CHẾ|PHỤ LỤC|Chương \d+|Điều \d+\.))|\Z)', 
@@ -84,12 +89,11 @@ def smart_legal_chunker(text: str, max_words: int = 600, overlap_words: int = 50
     return final_chunks
 
 
-def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_words=600, overlap=50):
+def process_corpus_to_md(input_dir: str, output_dir: str, base_max_words=600, overlap=50):
     """
-    Pipeline xử lý dữ liệu thô sang chuẩn JSONL cho Vector Database & BM25.
+    Pipeline xử lý dữ liệu thô sang các file .md trong thư mục riêng cho từng document.
     """
-    output_dir = os.path.dirname(output_jsonl_path)
-    if output_dir and not os.path.exists(output_dir):
+    if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
         
     json_files = glob.iglob(os.path.join(input_dir, "*.json"))
@@ -97,66 +101,69 @@ def process_corpus_to_jsonl(input_dir: str, output_jsonl_path: str, base_max_wor
     total_docs = 0
     total_chunks = 0
     
-    with open(output_jsonl_path, 'w', encoding='utf-8') as out_f:
-        for file_path in json_files:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    doc = json.load(f)
-            except Exception as e:
-                logging.warning(f"Lỗi đọc file {file_path}: {e}")
-                continue
-                
-            doc_id = str(doc.get("id", "")).strip()
-            title = doc.get("name", doc.get("title", "")).strip()
-            passage = doc.get("passage", "").strip()
-            link = doc.get("link", "").strip()
+    from tqdm import tqdm
+    json_files_list = list(json_files)
+    
+    # [ANA_FEATURE]: Áp dụng giới hạn số lượng file chạy thử nghiệm
+    if hasattr(config, 'JUST_CHECK') and config.JUST_CHECK is not None:
+        json_files_list = json_files_list[:config.JUST_CHECK]
+        print(f"\n[TEST MODE] Đã bật chế độ test, chỉ xử lý {len(json_files_list)} văn bản đầu tiên...")
+        
+    for file_path in tqdm(json_files_list, desc="Tiền xử lý", unit="file"):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                doc = json.load(f)
+        except Exception as e:
+            logging.warning(f"Lỗi đọc file {file_path}: {e}")
+            continue
             
-            if not doc_id or not passage:
-                logging.warning(f"File {file_path} bị bỏ qua do thiếu 'id' hoặc 'passage'.")
-                continue
-                
-            # 1. Làm sạch văn bản thô
-            cleaned_text = filter_and_clean_text(passage)
+        doc_id = str(doc.get("id", "")).strip()
+        title = doc.get("name", doc.get("title", "")).strip()
+        passage = doc.get("passage", "").strip()
+        
+        if not doc_id or not passage:
+            logging.warning(f"File {file_path} bị bỏ qua do thiếu 'id' hoặc 'passage'.")
+            continue
             
-            # 2. Tính toán offset không gian cho Header Injection
-            title_words = title.split()
-            if len(title_words) > 60:
-                title = " ".join(title_words[:60]) + "..."
-                
-            title_word_count = len(title.split())
+        # Tạo thư mục riêng cho document này
+        doc_dir = os.path.join(output_dir, doc_id)
+        os.makedirs(doc_dir, exist_ok=True)
             
-            # Đảm bảo (Title + Chunk) luôn <= base_max_words
-            dynamic_max_words = max(100, base_max_words - title_word_count)
+        # 1. Làm sạch văn bản thô
+        cleaned_text = filter_and_clean_text(passage)
+        
+        # 2. Tính toán offset không gian cho Header Injection
+        title_words = title.split()
+        if len(title_words) > 60:
+            title = " ".join(title_words[:60]) + "..."
             
-            # 3. Tách đoạn ngữ nghĩa
-            raw_chunks = smart_legal_chunker(cleaned_text, max_words=dynamic_max_words, overlap_words=overlap)
+        title_word_count = len(title.split())
+        
+        # Đảm bảo (Title + Chunk) luôn <= base_max_words
+        dynamic_max_words = max(100, base_max_words - title_word_count)
+        
+        # 3. Tách đoạn ngữ nghĩa
+        raw_chunks = smart_legal_chunker(cleaned_text, max_words=dynamic_max_words, overlap_words=overlap)
+        
+        # 4. Ghi dữ liệu dạng file .md
+        for i, chunk_raw in enumerate(raw_chunks):
+            chunk_id = f"chunk_{i}"
             
-            # 4. Ghi dữ liệu dạng JSONL
-            for i, chunk_raw in enumerate(raw_chunks):
-                chunk_id = f"{doc_id}_{i}"
-                
-                # Header Injection
-                text_with_header = f"# {title}\n\n{chunk_raw}" if title else chunk_raw
-                
-                record = {
-                    "doc_id": doc_id,
-                    "chunk_id": chunk_id,
-                    "title": title,
-                    "text": text_with_header,
-                    "raw_text": chunk_raw,
-                    "word_count": len(text_with_header.split(' ')), 
-                    "link": link
-                }
-                
-                out_f.write(json.dumps(record, ensure_ascii=False) + '\n')
-                total_chunks += 1
-                
-            total_docs += 1
+            # Header Injection
+            text_with_header = f"# {title}\n\n{chunk_raw}" if title else chunk_raw
             
-    print(f"\nHOÀN THÀNH TIỀN XỬ LÝ CORPUS!")
+            chunk_path = os.path.join(doc_dir, f"{chunk_id}.md")
+            with open(chunk_path, 'w', encoding='utf-8') as out_f:
+                out_f.write(text_with_header)
+                
+            total_chunks += 1
+            
+        total_docs += 1
+            
+    print(f"\nHOÀN THÀNH TIỀN XỬ LÝ CORPUS SANG FILE MD!")
     print(f"Tổng số văn bản xử lý thành công: {total_docs}")
     print(f"Tổng số chunks đã tạo: {total_chunks}")
-    print(f"File lưu tại: {output_jsonl_path}")
+    print(f"Thư mục lưu trữ: {output_dir}")
     
 
 if __name__ == "__main__":
@@ -175,7 +182,7 @@ if __name__ == "__main__":
     # Nếu file tồn tại (do user truyền hoặc file default có thật)
     if os.path.exists(input_path):
         print(f"Bắt đầu tiền xử lý (Max words: {max_w}, Overlap: {overlap_w})")
-        process_corpus_to_jsonl(input_path, output_path, max_words=max_w, overlap=overlap_w)
+        process_corpus_to_md(input_path, output_path, max_words=max_w, overlap=overlap_w)
     else:
         # KHỐI KIỂM TRA NGHIỆM THU (Manual Verification) - Nếu không truyền tham số
         print("=== CHẠY THỬ NGHIỆM (DRY RUN) ===")
