@@ -6,9 +6,7 @@ from pathlib import Path
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-# =========================================================================
-# 1. QUẢN LÝ ĐƯỜNG DẪN DỰ ÁN CỐ ĐỊNH VÀ ĐỘNG (PATHLIB)
-# =========================================================================
+# 1. QUẢN LÝ ĐƯỜNG DẪN DỰ ÁN CỐ ĐỊNH VÀ ĐỘNG 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Môi trường Docker của BTC
@@ -46,9 +44,7 @@ BM25_INDEX_PATH = INDICES_DIR / "bm25_index.pkl"
 PROCESSED_CORPUS_JSONL = DATA_PROCESSED_DIR / "processed_corpus.jsonl"
 LOG_FILE_PATH = LOGS_DIR / "pipeline.log"
 
-# =========================================================================
 # 2. HẰNG SỐ CẤU HÌNH PIPELINE & BM25
-# =========================================================================
 MAX_WORDS_PER_CHUNK = 600
 OVERLAP_WORDS = 50
 
