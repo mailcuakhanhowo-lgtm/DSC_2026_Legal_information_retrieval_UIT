@@ -16,7 +16,7 @@ def evaluate_submission(truth_file: str, pred_file: str, top_k: int = 5):
         with open(pred_file, 'r', encoding='utf-8') as f:
             pred_data = json.load(f)
     except FileNotFoundError:
-        print(f"[LỖI] Không tìm thấy file dự đoán: {pred_file}")
+        print(f"Không tìm thấy file dự đoán: {pred_file}")
         return
 
     total_precision = 0.0
