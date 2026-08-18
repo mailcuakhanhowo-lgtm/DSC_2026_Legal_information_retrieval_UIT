@@ -1,26 +1,69 @@
-# Bỏ qua các file dữ liệu lớn (Không đẩy lên GitHub)
+# =========================================================================
+# 1. DU LIEU THO & DA XU LY (DATASETS & DOCUMENTS)
+# =========================================================================
+data/
+corpus/
+selected-contexts/
+processed_data/
 *.zip
 *.rar
+*.tar
+*.gz
+*.7z
 *.csv
+*.tsv
 *.xlsx
 *.docx
 *.pdf
+*.jsonl
 
-# Bỏ qua các thư mục dữ liệu giải nén và dữ liệu đã xử lý
-/corpus/
-/data/
-selected-contexts/
-processed_data/
+# =========================================================================
+# 2. CHI MUC, DATABASE & MO HINH NANG (INDICES, DATABASES & LARGE MODELS)
+# =========================================================================
+indices/
+models/
+*.pkl
+*.pickle
+*.db
+*.sqlite
+*.sqlite3
+*.bin
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.index
 
-# Bỏ qua các file cấu hình tạm hoặc file sinh ra trong quá trình chạy
+# =========================================================================
+# 3. KET QUA DU DOAN & SUBMISSION ARTIFACTS
+# =========================================================================
+submission.json
+submission.zip
+scores.json
+predictions/
+results/
+
+# =========================================================================
+# 4. NHAT KY & FILE HE THONG (LOGS & SYSTEM CACHE)
+# =========================================================================
+logs/
+*.log
+pipeline_errors.log
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .ipynb_checkpoints/
-.env
+__MACOSX/
+.DS_Store
+Thumbs.db
+*.ps1
 
-# (Tuỳ chọn) Bạn có thể bỏ qua file json nếu không muốn đẩy data lên
-# Nhưng ở đây tạm thời bỏ qua file zip lớn
-selected-contexts.zip
-train.json
-warmup.json
-public-official.json
+# =========================================================================
+# 5. MOI TRUONG AO & IDE CONFIG (VIRTUAL ENV & IDE SETTINGS)
+# =========================================================================
+.venv/
+venv/
+env/
+.env
+.vscode/
+.idea/

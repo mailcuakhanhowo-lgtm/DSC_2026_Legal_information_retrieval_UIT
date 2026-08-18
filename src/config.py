@@ -1,15 +1,56 @@
-# CẤU HÌNH HỆ THỐNG - DỄ THEO DÕI VÀ ĐIỀU CHỈNH
+import os
+import sys
+from pathlib import Path
 
-# 1. Đường dẫn Dữ liệu (Paths)
-DEFAULT_INPUT_PATH = r"D:\Project Vibe Coding\DSC_2026\selected-contexts\selected-contexts\context_21.json"
-DEFAULT_OUTPUT_DIR = r"processed_data"
+# Đảm bảo in UTF-8 trên Windows PowerShell
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
-# 2. Tham số Tiền xử lý (Preprocessing)
-# Áp dụng cho Sliding Window (Lớp 2)
-MAX_WORDS_PER_CHUNK = 6000  # Phù hợp với ngữ cảnh 8192 tokens
-OVERLAP_WORDS = 50          # Số từ gối đầu nhau để không đứt nghĩa
+# =========================================================================
+# 1. QUẢN LÝ ĐƯỜNG DẪN DỰ ÁN CỐ ĐỊNH VÀ ĐỘNG (PATHLIB)
+# =========================================================================
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# 3. Thông số Mô hình (Models)
-EMBEDDING_MODEL = "AITeamVN/Vietnamese_Embedding_v2"
-EMBEDDING_DIM = 1024
-MAX_POSITION_EMBEDDINGS = 8194
+# Môi trường Docker của BTC
+BTC_DOCKER_INPUT = Path("/app/input")
+IS_BTC_DOCKER = BTC_DOCKER_INPUT.exists()
+
+if IS_BTC_DOCKER:
+    REF_DIR = Path("/app/input/ref")
+    RES_DIR = Path("/app/input/res")
+    OUTPUT_DIR = Path("/app/output")
+    
+    TRAIN_PATH = REF_DIR / "train.json"
+    PUBLIC_TEST_PATH = RES_DIR / "public-official.json"
+    SUBMISSION_PATH = OUTPUT_DIR / "submission.json"
+    
+    DATA_RAW_DIR = REF_DIR
+    DATA_PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+    INDICES_DIR = PROJECT_ROOT / "indices"
+    LOGS_DIR = PROJECT_ROOT / "logs"
+else:
+    DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
+    DATA_PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+    INDICES_DIR = PROJECT_ROOT / "indices"
+    LOGS_DIR = PROJECT_ROOT / "logs"
+    
+    TRAIN_PATH = DATA_RAW_DIR / "train.json"
+    WARMUP_PATH = DATA_RAW_DIR / "warmup.json"
+    PUBLIC_TEST_PATH = DATA_RAW_DIR / "public-official.json"
+    SELECTED_CONTEXTS_DIR = DATA_RAW_DIR / "selected-contexts"
+    SUBMISSION_PATH = PROJECT_ROOT / "submission.json"
+
+# Đường dẫn DB SQLite & BM25 Index
+DB_PATH = INDICES_DIR / "legal_corpus.db"
+BM25_INDEX_PATH = INDICES_DIR / "bm25_index.pkl"
+PROCESSED_CORPUS_JSONL = DATA_PROCESSED_DIR / "processed_corpus.jsonl"
+LOG_FILE_PATH = LOGS_DIR / "pipeline.log"
+
+# =========================================================================
+# 2. HẰNG SỐ CẤU HÌNH PIPELINE & BM25
+# =========================================================================
+MAX_WORDS_PER_CHUNK = 600
+OVERLAP_WORDS = 50
+
+TOP_K_CANDIDATE_CHUNKS = 50   # Lấy Top 50 chunks từ BM25 để Max Pooling
+TOP_K_SUBMISSION_DOCS = 5     # Ràng buộc tối đa 5 document_id của BTC

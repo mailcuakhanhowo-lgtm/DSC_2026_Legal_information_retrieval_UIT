@@ -28,14 +28,20 @@ Tệp này được quản lý bởi Thư ký tổng quyền (Secretary) nhằm 
   - **Bắt buộc:** Áp dụng thuật toán **Sliding Window** (Cửa sổ trượt / Chunk Overlap) làm tiêu chuẩn tối thiểu để không làm đứt gãy ngữ cảnh pháp lý giữa các đoạn.
   - **Nâng cao (Định hướng kiến trúc):** Triển khai kiến trúc **Small2Big (Parent-Child Document Retrieval)**. Mô hình Vector sẽ chỉ so khớp trên các đoạn văn bản rất nhỏ và đặc thù (giúp tăng độ nhạy và chính xác). Khi truy xuất thành công, hệ thống sẽ trả về ID của văn bản lớn chứa đoạn nhỏ đó. Đây là phương án Kim Cương hoàn toàn phù hợp với luật chơi của Ban tổ chức.
 
-## 📅 Báo cáo cập nhật (Module Preprocessing)
-**Người báo cáo:** Engineer / User
+## 📅 Cập nhật ngày 18/08/2026
+**Người báo cáo:** Search Systems Engineer
 
-### 5. Cập nhật Mã nguồn - Module Tiền xử lý (`src/preprocess.py`)
-- **Tích hợp Command Line Interface (CLI):** Đã import `sys` và `argparse`. Hỗ trợ nhận tham số từ dòng lệnh (Ví dụ: `--input` cho file đầu vào và `--output` cho thư mục lưu kết quả) để chạy linh hoạt với nhiều bộ dữ liệu khác nhau.
-- **Cải tiến Luồng Thực thi (Execution Flow):** 
-  - Nếu truyền đủ tham số, hệ thống sẽ thực thi hàm xử lý dữ liệu thật `process_corpus()`.
-  - Nếu chạy không tham số, hệ thống tự động rơi vào chế độ **DRY RUN** (Chạy thử nghiệm) để in ra console quy trình cắt đoạn của văn bản mẫu (ID: 740) và hiển thị Help text gợi ý.
-- **Đánh giá từ Reviewer:** Bản cập nhật chuẩn mực. Việc dùng `argparse` giúp script tránh bị hard-code tên file, là tiền đề vững chắc để tự động hóa toàn bộ Stage 0 trên Google Colab.
+### 6. Hoàn thiện Hệ thống Baseline Truy xuất Thông tin Pháp luật (BM25 + SQLite)
+- **Kiến trúc Modular:**
+  - Quy hoạch dự án theo cấu trúc chuẩn: `src/config.py`, `src/preprocess_and_index.py`, `src/inference.py`, `indices/`, `logs/`.
+- **Bảo tồn Logic Chunking:** Tích hợp nguyên vẹn 100% hai hàm `filter_and_clean_text` và `smart_legal_chunker` để xử lý 8.532 văn bản luật, tạo 1.384.789 chunks kèm Title Injection `# {name}\n\n{chunk}`.
+- **Lưu trữ & Chỉ mục (Giai đoạn 1):**
+  - Nạp toàn bộ 1.384.789 chunks vào SQLite DB `indices/legal_corpus.db` (bảng `chunks`, đánh index trên `doc_id`).
+  - Phân tách từ tiếng Việt qua PyVi và huấn luyện mô hình BM25Okapi, đóng gói thành `indices/bm25_index.pkl` kèm bảng ánh xạ tra cứu ngược `chunk_doc_map`.
+- **Suy luận & Tổng hợp (Giai đoạn 2):**
+  - Xây dựng `src/inference.py` truy vấn Top 50 chunks qua BM25, áp dụng cơ chế Document Aggregation (Max Pooling) để lấy điểm cao nhất của từng `doc_id` gốc, cắt lấy Top 5 doc_ids.
+  - Định dạng xuất `submission.json` đáp ứng nghiêm ngặt định dạng của Ban tổ chức.
+- **Ràng buộc:** Tuyệt đối không dùng GPU, FAISS, hay Reranker; không thêm emoji/icon vào mã nguồn.
 
 ---
+
