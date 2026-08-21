@@ -39,3 +39,15 @@ Tệp này được quản lý bởi Thư ký tổng quyền (Secretary) nhằm 
 - **Đánh giá từ Reviewer:** Bản cập nhật chuẩn mực. Việc dùng `argparse` giúp script tránh bị hard-code tên file, là tiền đề vững chắc để tự động hóa toàn bộ Stage 0 trên Google Colab.
 
 ---
+
+## 📅 Báo cáo cập nhật (Module Embedding & Preprocessing)
+**Người báo cáo:** Engineer / User
+
+### 6. Đại tu Kiến trúc & Hoàn thiện Tiền xử lý
+- **Kiến trúc Vector DB:** Chuyển đổi thành công sang **Milvus Lite** (`milvus_legal.db`). Đã hợp nhất Vector, Metadata và Text vào chung một CSDL để tăng tốc truy xuất và dễ quản lý.
+- **Tối ưu phần cứng (RTX 5050):** Thiết lập khiên chắn VRAM với `max_seq_length = 2048` và khóa cứng `BATCH_SIZE = 2`. Loại bỏ hoàn toàn rủi ro tràn RAM (OOM) cho mô hình `Vietnamese_Embedding_v2`.
+- **Tiền xử lý (Preprocessing):** Cập nhật Regex lọc sạch Preamble (Quốc hiệu, thủ tục). Xuất dữ liệu dưới dạng cây thư mục Markdown phân cấp (`processed_data/ID/chunk_X.md`) để dễ dàng đọc bằng mắt và debug. Tích hợp thanh tiến trình `tqdm`.
+- **Môi trường Test:** Áp dụng biến `JUST_CHECK = 1000` trong `config.py` để chạy thử nghiệm khép kín trên 1,000 văn bản đầu tiên trước khi chạy thực tế toàn bộ kho dữ liệu.
+- **Cập nhật Quy tắc (rule.md):** Đã thiết lập quy tắc chỉnh sửa code nghiêm ngặt, chỉ cho phép chỉnh sửa cục bộ, nghiêm cấm ghi đè toàn bộ cấu trúc file nhằm bảo toàn mã nguồn gốc.
+
+---

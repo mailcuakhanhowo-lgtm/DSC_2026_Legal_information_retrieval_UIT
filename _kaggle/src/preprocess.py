@@ -4,12 +4,12 @@ import json
 import glob
 import unicodedata
 import logging
-import argparse
-import config
-
-# Thiết lập Logging hệ thống
-logging.basicConfig(filename='pipeline_errors.log', level=logging.WARNING, 
-                    format='%(asctime)s - %(message)s')
+# CẤU HÌNH THÔNG SỐ (Thay thế cho config.py)
+INPUT_PATH = "/kaggle/input/datasets/nguynquckhanh/dsc-2026-srcndata2/_kaggle/selected-contexts/selected-contexts"
+OUTPUT_DIR = "/kaggle/working/processed_data"
+MAX_WORDS_PER_CHUNK = 6000
+OVERLAP_WORDS = 50
+JUST_CHECK = None  # Đặt thành số (vd: 10) nếu chỉ muốn test thử 10 file đầu
 
 def filter_and_clean_text(text: str) -> str:
     """
@@ -159,8 +159,8 @@ def process_corpus_to_md(input_dir: str, output_dir: str, base_max_words=600, ov
     json_files_list = list(json_files)
     
     # [ANA_FEATURE]: Áp dụng giới hạn số lượng file chạy thử nghiệm
-    if hasattr(config, 'JUST_CHECK') and config.JUST_CHECK is not None:
-        json_files_list = json_files_list[:config.JUST_CHECK]
+    if JUST_CHECK is not None:
+        json_files_list = json_files_list[:JUST_CHECK]
         print(f"\n[TEST MODE] Đã bật chế độ test, chỉ xử lý {len(json_files_list)} văn bản đầu tiên...")
         
     for file_path in tqdm(json_files_list, desc="Tiền xử lý", unit="file"):
@@ -220,46 +220,16 @@ def process_corpus_to_md(input_dir: str, output_dir: str, base_max_words=600, ov
             
         total_docs += 1
             
-    print(f"\nHOÀN THÀNH TIỀN XỬ LÝ CORPUS SANG FILE MD!")
+    print(f"\nHOÀN THÀNH TIỀN XỬ LÝ CORPUS SANG FILE JSONL!")
     print(f"Tổng số văn bản xử lý thành công: {total_docs}")
     print(f"Tổng số chunks đã tạo: {total_chunks}")
     print(f"Thư mục lưu trữ: {output_dir}")
     
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Tiền xử lý văn bản pháp luật (Sàng lọc & Chunking).")
-    parser.add_argument("--input", type=str, default=config.DEFAULT_INPUT_PATH, help=f"Đường dẫn file JSON (Mặc định: {config.DEFAULT_INPUT_PATH})")
-    parser.add_argument("--output", type=str, default=config.DEFAULT_OUTPUT_DIR, help=f"Thư mục đầu ra (Mặc định: {config.DEFAULT_OUTPUT_DIR})")
-    
-    args = parser.parse_args()
-    
-    input_path = args.input
-    output_path = args.output
-    
-    max_w = config.MAX_WORDS_PER_CHUNK
-    overlap_w = config.OVERLAP_WORDS
-    
-    # Nếu file tồn tại (do user truyền hoặc file default có thật)
-    if os.path.exists(input_path):
-        print(f"Bắt đầu tiền xử lý (Max words: {max_w}, Overlap: {overlap_w})")
-        process_corpus_to_md(input_path, output_path, base_max_words=max_w, overlap=overlap_w)
+    if os.path.exists(INPUT_PATH):
+        print(f"Bắt đầu tiền xử lý (Max words: {MAX_WORDS_PER_CHUNK}, Overlap: {OVERLAP_WORDS})")
+        process_corpus_to_md(INPUT_PATH, OUTPUT_DIR, base_max_words=MAX_WORDS_PER_CHUNK, overlap=OVERLAP_WORDS)
     else:
-        # KHỐI KIỂM TRA NGHIỆM THU (Manual Verification) - Nếu không truyền tham số
-        print("=== CHẠY THỬ NGHIỆM (DRY RUN) ===")
-        print("Gợi ý chạy thật: python src/preprocess.py --input warmup.json --output processed_data\n")
-        
-        sample_doc = {
-            "id": "740",
-            "name": "Quyết định số 5868/QĐ-UBND",
-            "passage": "Căn cứ Luật Tổ chức chính quyền địa phương ngày 19 tháng 6 năm 2015;\nTheo đề nghị của Giám đốc Sở Tư pháp.\nQUYẾT ĐỊNH:\nĐiều 1. Ban hành Quy chế làm việc.\nĐiều 2. Quy chế này có hiệu lực từ ngày ký.\nNơi nhận:\n- Như Điều 2;\n- Lưu: VT."
-        }
-        
-        print(f"[1] Văn bản gốc:\n{sample_doc['passage']}\n")
-        
-        cleaned = filter_and_clean_text(sample_doc['passage'])
-        print(f"[2] Sau khi lọc rác:\n{cleaned}\n")
-        
-        chunks = stateful_legal_chunker(cleaned, max_words=max_w, overlap_words=overlap_w)
-        print(f"[3] Cắt đoạn (Số lượng chunk: {len(chunks)}):")
-        for idx, c in enumerate(chunks):
-            print(f"--- Chunk {idx} ---\n# {sample_doc['name']}\n{c}\n")
+        print(f"❌ LỖI: Không tìm thấy thư mục {INPUT_PATH}.")
+        print("Sếp nhớ chỉnh lại biến INPUT_PATH ở đầu code cho khớp với đường dẫn dataset trên Kaggle nhé!")
