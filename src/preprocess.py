@@ -150,6 +150,7 @@ def process_corpus_to_md(input_dir: str, output_dir: str, base_max_words=600, ov
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
         
+
     json_files = glob.iglob(os.path.join(input_dir, "*.json"))
     
     total_docs = 0
@@ -235,6 +236,10 @@ if __name__ == "__main__":
     
     input_path = args.input
     output_path = args.output
+    
+    # [ANA_FIX]: Đảm bảo output_path là một file .jsonl chứ không phải là một thư mục
+    if not output_path.endswith('.jsonl'):
+        output_path = os.path.join(output_path, 'corpus.jsonl')
     
     max_w = config.MAX_WORDS_PER_CHUNK
     overlap_w = config.OVERLAP_WORDS
