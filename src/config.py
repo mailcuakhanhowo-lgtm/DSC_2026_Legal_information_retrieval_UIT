@@ -35,3 +35,7 @@ YÊU CẦU KỸ THUẬT NGHIÊM NGẶT (TUYỆT ĐỐI TUÂN THỦ):
 2. CẤM XUỐNG DÒNG: Câu trả lời phải là ĐÚNG MỘT ĐOẠN VĂN DUY NHẤT. Tuyệt đối không được có bất kỳ dấu xuống dòng (Enter) nào.
 3. CẤM BỊA TIÊU ĐỀ: Tuyệt đối KHÔNG được có chữ "Điều", "Khoản", "Điểm", "Chương" ở đầu câu trả lời. Hãy viết thẳng vào phần nội dung quy định.
 4. CẤM RÁC: Tuyệt đối KHÔNG chào hỏi, KHÔNG giải thích. Chỉ in ra đúng nội dung đoạn văn giả định."""
+
+# ================= CẤU HÌNH RERANKER (PHASE 2) =================
+RERANKER_MODEL = 'BAAI/bge-reranker-v2-m3'
+RERANKER_BATCH_SIZE = 4

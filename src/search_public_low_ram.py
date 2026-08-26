@@ -11,8 +11,8 @@ sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'replace')
 
 EMBEDED_DATA_DIR = r"D:\Project Vibe Coding\DSC_2026\embeded_data"
 QUERIES_DB_PATH = r"D:\Project Vibe Coding\DSC_2026\embed_queries\milvus_queries_public.db"
-SUBMISSION_OUTPUT = r"D:\Project Vibe Coding\DSC_2026\submission\submission.json"
-TOP_K = 5
+SUBMISSION_OUTPUT = r"D:\Project Vibe Coding\DSC_2026\submission\submission_public_top30.json"
+TOP_K = 30
 
 def generate_submission_low_ram():
     print(f"\n[1] Đang nạp 1000 Vectors câu hỏi Public từ Milvus...")
@@ -77,28 +77,29 @@ def generate_submission_low_ram():
         for q_idx in range(len(query_ids)):
             # Kết hợp Kỷ lục cũ và Kỷ lục mới của Chunk này
             combined_scores = np.concatenate((best_scores_cpu[q_idx], top_scores[q_idx]))
-            combined_docs = best_doc_ids[q_idx] + [metadata[idx]["doc_id"] for idx in top_indices[q_idx]]
+            # Sửa lại: Lấy chunk_id thay vì doc_id để Reranker đọc chính xác đoạn ngắn!
+            combined_chunks = best_doc_ids[q_idx] + [metadata[idx]["chunk_id"] for idx in top_indices[q_idx]]
             
             # Sắp xếp lại để lấy Top K của cả 2
             sorted_idxs = np.argsort(combined_scores)[::-1]
             
-            # Cập nhật lại kỷ lục (chỉ lấy unique doc_ids để tránh trùng lặp)
-            new_best_docs = []
+            # Cập nhật lại kỷ lục (lọc trùng lặp chunk_id)
+            new_best_chunks = []
             new_best_scores = []
             for i in sorted_idxs:
-                doc = combined_docs[i]
-                if doc not in new_best_docs:
-                    new_best_docs.append(doc)
+                chunk = combined_chunks[i]
+                if chunk not in new_best_chunks:
+                    new_best_chunks.append(chunk)
                     new_best_scores.append(combined_scores[i])
-                if len(new_best_docs) == TOP_K:
+                if len(new_best_chunks) == TOP_K:
                     break
                     
-            while len(new_best_docs) < TOP_K:
-                new_best_docs.append("")
+            while len(new_best_chunks) < TOP_K:
+                new_best_chunks.append("")
                 new_best_scores.append(-1.0)
                 
             best_scores_cpu[q_idx] = new_best_scores
-            best_doc_ids[q_idx] = new_best_docs
+            best_doc_ids[q_idx] = new_best_chunks
             
         best_scores = torch.tensor(best_scores_cpu).to(device)
         
