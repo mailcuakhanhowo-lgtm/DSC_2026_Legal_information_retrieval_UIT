@@ -11,8 +11,9 @@ sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'replace')
 
 EMBEDED_DATA_DIR = r"D:\Project Vibe Coding\DSC_2026\embeded_data"
 QUERIES_DB_PATH = r"D:\Project Vibe Coding\DSC_2026\embed_queries\milvus_queries_public.db"
-SUBMISSION_OUTPUT = r"D:\Project Vibe Coding\DSC_2026\submission\submission_public_top30.json"
-TOP_K = 30
+import config
+SUBMISSION_OUTPUT = config.SUBMISSION_SEMANTIC_TOP_K
+TOP_K = config.RETRIEVAL_TOP_K
 
 def generate_submission_low_ram():
     print(f"\n[1] Đang nạp 1000 Vectors câu hỏi Public từ Milvus...")

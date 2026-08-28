@@ -17,12 +17,14 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import RERANKER_MODEL, RERANKER_BATCH_SIZE, LLM_CACHE_DIR
+import config
 
 # ================= CẤU HÌNH =================
-TOP30_FILE = r"D:\Project Vibe Coding\DSC_2026\submission\submission_public_top30.json"
-QUESTIONS_FILE = r"D:\Project Vibe Coding\DSC_2026\public-official.json"
-CONTEXT_DB = r"D:\Project Vibe Coding\DSC_2026\embeded_data\milvus_legal.db"
-FINAL_SUBMISSION = r"D:\Project Vibe Coding\DSC_2026\submission\submission.json"
+# Lấy trực tiếp danh sách Top K đã qua lai ghép RRF
+TOP_K_FILE = config.SUBMISSION_HYBRID_TOP_K
+QUESTIONS_FILE = config.QUESTIONS_PUBLIC_FILE
+CONTEXT_DB = config.MILVUS_DB_PATH
+FINAL_SUBMISSION = config.FINAL_SUBMISSION
 
 TOP_K = 5
 BATCH_SIZE = RERANKER_BATCH_SIZE
@@ -34,13 +36,13 @@ def load_data():
     # Lấy text câu hỏi (Đảm bảo bóc đúng chuỗi string từ biến 'question')
     q_dict = {qid: item.get('question', '') if isinstance(item, dict) else item for qid, item in questions_raw.items()}
     
-    print("[2] Đang tải kết quả Top 30 thô (Retrieval)...")
-    with open(TOP30_FILE, 'r', encoding='utf-8') as f:
-        top30_data = json.load(f)
+    print(f"[2] Đang tải kết quả Top {config.RRF_TOP_K} thô (Retrieval)...")
+    with open(TOP_K_FILE, 'r', encoding='utf-8') as f:
+        top_k_data = json.load(f)
         
     # Tập hợp toàn bộ chunk_id cần thiết để truy vấn text từ Milvus 1 lần cho nhanh
     needed_chunk_ids = set()
-    for qid, data in top30_data.items():
+    for qid, data in top_k_data.items():
         needed_chunk_ids.update(data['answer'])
     needed_chunk_ids = list(needed_chunk_ids)
     
@@ -71,10 +73,10 @@ def load_data():
             
     print(f"    -> Đã trích xuất thành công {len(doc_text_dict)} đoạn văn bản!")
             
-    return q_dict, top30_data, doc_text_dict
+    return q_dict, top_k_data, doc_text_dict
 
 def main():
-    q_dict, top30_data, doc_text_dict = load_data()
+    q_dict, top_k_data, doc_text_dict = load_data()
     
     print(f"\n[4] Đang nạp {RERANKER_MODEL} lên VRAM (Sẽ tốn chút thời gian)...")
     # Tự động chọn Class đúng với cấu trúc Model
@@ -91,7 +93,7 @@ def main():
     import sys, os
     
     # Duyệt qua từng câu hỏi
-    for qid, data in tqdm(top30_data.items(), desc="Reranking"):
+    for qid, data in tqdm(top_k_data.items(), desc="Reranking"):
         question_text = q_dict.get(qid, "")
         candidate_chunks = data['answer']
         

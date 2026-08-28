@@ -37,6 +37,7 @@ dependencies = [
     "pygments==2.20.0",
     "pymilvus>=2.4.0",
     "pyyaml==6.0.3",
+    "rank-bm25>=0.2.2",
     "regex==2026.7.19",
     "rich==15.0.0",
     "safetensors==0.8.0",
