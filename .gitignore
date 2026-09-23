@@ -24,3 +24,26 @@ selected-contexts.zip
 train.json
 warmup.json
 public-official.json
+
+# Thu muc chua data va model LLM local
+local_llm_data/
+
+# Outputs sinh ra trong qua trinh lam viec
+/embed_queries/
+/embed_queries
+milvus_*.db
+local_llm_data/hyde_queries.json
+
+# File tam cua he dieu hanh hoac trinh duyet
+._*
+.DS_Store
+Unconfirmed*
+*.crdownload
+*.tmp
+
+# Thu muc nhap de test code
+scratch/
+
+# Thu muc ket qua (Output Vector và Database)
+embeded_data/
+result/
